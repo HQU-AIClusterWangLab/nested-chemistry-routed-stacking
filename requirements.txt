@@ -1,0 +1,12 @@
+numpy
+pandas
+scipy
+scikit-learn
+matplotlib
+Pillow
+torch
+torch-geometric
+ase
+schnetpack
+mace-torch
+nequip

@@ -1,0 +1,66 @@
+# Private scientific data and derived tables
+data/raw/
+data/processed/
+data/private/
+dataset/
+datasets/
+database/
+*.csv
+*.tsv
+*.parquet
+*.jsonl
+
+# Model artifacts and training outputs
+*.pt
+*.pth
+*.ckpt
+*.onnx
+checkpoints/
+models/
+runs/
+outputs/
+
+# Electronic-structure inputs, outputs, and real-space fields
+*.log
+*.out
+*.chk
+*.fchk
+*.gbw
+*.densities
+*.densitiesinfo
+*.cube
+*.molden
+*.molden.input
+*.engrad
+*.hess
+*.ges
+*.xyz
+*.gjf
+*.com
+*.inp
+*.opt
+
+# Generated manuscript and figure assets
+*.png
+*.jpg
+*.jpeg
+*.tif
+*.tiff
+*.svg
+*.pdf
+*.docx
+*.pptx
+*.opju
+
+# Runtime and local tooling
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.idea/
+.vscode/
+.env
+.env.*
+*.bak
+*.tmp
+~$*
