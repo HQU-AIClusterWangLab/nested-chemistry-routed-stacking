@@ -1,0 +1,8 @@
+# Copy these paths to a private, untracked local configuration or pass them on the CLI.
+datasets:
+  schnet_static_phys: /absolute/path/to/processed
+  paa_schnet_coord: /absolute/path/to/processed_dynamic_coord
+  painn_coord_bond: /absolute/path/to/processed_dynamic_coord_bond
+output: /absolute/path/outside/this/repository/ncrs_run
+seeds: [42, 123, 456]
+router_alpha: 0.25

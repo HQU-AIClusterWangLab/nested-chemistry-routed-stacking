@@ -1,30 +1,33 @@
 # Nested Chemistry-Routed Stacking
 
-Research code for strict leave-one-system-out (LOSO) potential-energy ranking in heterogeneous doped clusters. The code implements the progression from baseline atomistic models through physics-aware attention, uncertainty diagnostics, nested chemistry-routed stacking, replay screening, and finite-budget DFT candidate selection.
+This repository contains the final training and evaluation code for **Nested Chemistry-Routed Stacking (NCRS)**, a leakage-safe strict leave-one-system-out (LOSO) workflow for potential-energy ranking across chemically heterogeneous doped clusters.
 
-## Scope
+NCRS is deliberately released as code only. It does not contain the research database, processed structures, DFT inputs or outputs, checkpoints, prediction tables, figure scripts, or historical experiments.
 
-The repository contains code only. It deliberately excludes the private cluster database, geometries, DFT outputs, trained checkpoints, intermediate predictions, and manuscript assets. Those materials are central to the underlying data-driven project and are not distributed through this repository.
+## What is included
 
-Consequently, this repository is an implementation and workflow release, not a self-contained benchmark release. The public scripts can be inspected and adapted, but the reported numerical results cannot be reproduced without an independently authorized dataset and the required electronic-structure software.
+The public workflow is exactly:
 
-## Layout
+```text
+processed private data
+  -> strict LOSO expert training (three seeds per expert)
+  -> OOF predictions for each outer training pool
+  -> learned gated stacking and a predeclared chemistry/context policy
+  -> inner-system rule selection using MAE + 0.25 * MAE95
+  -> final NCRS prediction on the held-out system
+```
 
-- `phase 0/`: dataset preparation, strict-LOSO baselines, physics-aware branches, UQ diagnostics, and stacking/routing experiments.
-- `phase_6/`: deterministic prediction preparation, replay screening, DFT candidate selection, and chemistry-validation packaging.
-- `picture/`: scripts used to construct manuscript and supporting-information figures from saved numerical and post-DFT inputs.
-- `orca/`: Windows-oriented ORCA and Multiwfn helper scripts for the post-DFT workflow.
-- `data/`: documentation only. No scientific data are committed.
+The three final expert branches are:
 
-The final paper-facing path is:
+1. `SchNet-static-phys`
+2. `PAA-SchNet-coord`
+3. `PaiNN-coord-bond`
 
-`strict LOSO -> Nested Chemistry-Routed Stacking -> finite-budget DFT validation`
+The learned gate is the manuscript architecture `15 -> 96 -> 48 -> 9`. NCRS does not train these paths serially: for each outer fold, it chooses between the learned gate and the rule-based chemistry path using results from the remaining inner systems only.
 
-The central final scripts are `phase 0/phase4_3_nested_router_validation.py`, `phase_6/phase6_0_prepare_nested_router_predictions.py`, `phase_6/phase6_1_replay_screening_final.py`, and `phase_6/phase6_2_select_dft_candidates_final.py`.
+## Installation
 
-## Environment
-
-Create an environment appropriate for the selected branch of the workflow:
+Create an isolated environment with a PyTorch build appropriate for the target GPU, then install the small set of NCRS dependencies:
 
 ```powershell
 conda create -n ncrs python=3.10
@@ -32,18 +35,29 @@ conda activate ncrs
 pip install -r requirements.txt
 ```
 
-The MACE and NequIP baselines additionally require their framework-specific installations and a compatible PyTorch/PyG build. The DFT and real-space analysis scripts require separately licensed or installed tools, including Gaussian or ORCA, Multiwfn, and related post-processing utilities.
+## Data Interface
 
-## Private-data Interface
+NCRS consumes three already processed private `.pt` dataset roots. It does not provide a dataset-building pipeline. The required folder layout and tensor fields are documented in [examples/dataset_schema.md](examples/dataset_schema.md).
 
-Before executing a data-dependent script, point its input variables to an authorized local dataset and choose an output directory outside the repository. Historical scripts retain some Windows path configuration from the original research environment; these settings must be replaced locally and never committed with data paths or data files.
+The three roots must be aligned one-to-one by `system-id/sample-id`; the runner stops if keys, system labels, or energy labels disagree. Keep all private inputs and outputs outside this repository.
 
-See [data/README.md](data/README.md) for the required data boundary and expected categories of inputs.
+## Run
 
-## Data Policy
+```powershell
+python scripts/run_strict_loso.py `
+  --schnet-data D:\private_data\processed `
+  --paa-data D:\private_data\processed_dynamic_coord `
+  --painn-data D:\private_data\processed_dynamic_coord_bond `
+  --output D:\private_results\ncrs_loso_run `
+  --device cuda
+```
 
-No raw or processed database, structure collection, DFT log, cube file, checkpoint, prediction table, or generated figure is tracked. The `.gitignore` is intentionally conservative and blocks these categories even if they are later placed inside the repository.
+The runner writes fold-level OOF and held-out prediction tables, fusion-path predictions, trained fold checkpoints, `ncrs_fold_metrics.csv`, and `ncrs_summary.json` only to the explicit external output directory.
+
+## Reproducibility Boundary
+
+The public code documents and implements the final NCRS method. Numerical reproduction of the manuscript requires an independently authorized dataset with the same preprocessing, labels, graph construction, and split metadata. This repository grants no rights to the private database or derived computational outputs.
 
 ## License
 
-Released under the MIT License. The license applies to code only and grants no access rights to the private database or computational outputs.
+MIT License, code only.

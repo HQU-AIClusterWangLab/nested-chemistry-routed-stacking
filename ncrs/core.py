@@ -1,16 +1,11 @@
 # -*- coding: utf-8 -*-
-"""
-Shared utilities for final-branch Phase 3/4 experiments.
+"""Core models and strict-LOSO utilities for NCRS.
 
-Final deployable branches:
-  1. SchNet + static physical features
-  2. PAA-SchNet + coordination dynamic feature
-  3. PaiNN + coordination + local bond statistics
-
-Mulliken features are intentionally excluded.
+The final experts are SchNet-static-phys, PAA-SchNet-coord, and
+PaiNN-coord-bond. Mulliken quantities are deliberately excluded from model
+inputs: they belong to post-DFT interpretation, not to inference.
 """
 import copy
-import csv
 import math
 import random
 import time
@@ -25,7 +20,6 @@ from torch.optim import Adam
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 
-ROOT = Path(r"D:\lunwen\2.1sci")
 RANDOM_SEED = 42
 SEEDS = [42, 123, 456]
 BATCH_SIZE_SCHNET = 64
@@ -277,35 +271,45 @@ def pool_atom_energies(atom_energies, batch):
     return energy.squeeze(-1), atom_energies
 
 
-BRANCH_CONFIGS = [
-    {
-        "key": "schnet_static_phys",
-        "label": "SchNet-static-phys",
-        "dataset": ROOT / "phase 0" / "dataset" / "processed",
-        "model_class": SchNetPhys,
-        "batch_size": BATCH_SIZE_SCHNET,
-        "seeds": SEEDS,
-    },
-    {
-        "key": "paa_schnet_coord",
-        "label": "PAA-SchNet-coord",
-        "dataset": ROOT / "phase 0" / "dataset" / "processed_dynamic_coord",
-        "model_class": PAASchNet,
-        "batch_size": BATCH_SIZE_SCHNET,
-        "seeds": SEEDS,
-    },
-    {
-        "key": "painn_coord_bond",
-        "label": "PaiNN-coord_bond",
-        "dataset": ROOT / "phase 0" / "dataset" / "processed_dynamic_coord_bond",
-        "model_class": PaiNNPhys,
-        "batch_size": BATCH_SIZE_PAINN,
-        "seeds": SEEDS,
-    },
-]
+def branch_configs(dataset_roots, seeds=SEEDS):
+    """Build the final expert specification from explicit private-data roots.
+
+    ``dataset_roots`` must provide one root for each expert. This prevents a
+    public checkout from silently depending on a private project directory.
+    """
+    required = {"schnet_static_phys", "paa_schnet_coord", "painn_coord_bond"}
+    missing = required.difference(dataset_roots)
+    if missing:
+        raise ValueError(f"Missing dataset roots for: {sorted(missing)}")
+    return [
+        {
+            "key": "schnet_static_phys",
+            "label": "SchNet-static-phys",
+            "dataset": Path(dataset_roots["schnet_static_phys"]),
+            "model_class": SchNetPhys,
+            "batch_size": BATCH_SIZE_SCHNET,
+            "seeds": list(seeds),
+        },
+        {
+            "key": "paa_schnet_coord",
+            "label": "PAA-SchNet-coord",
+            "dataset": Path(dataset_roots["paa_schnet_coord"]),
+            "model_class": PAASchNet,
+            "batch_size": BATCH_SIZE_SCHNET,
+            "seeds": list(seeds),
+        },
+        {
+            "key": "painn_coord_bond",
+            "label": "PaiNN-coord-bond",
+            "dataset": Path(dataset_roots["painn_coord_bond"]),
+            "model_class": PaiNNPhys,
+            "batch_size": BATCH_SIZE_PAINN,
+            "seeds": list(seeds),
+        },
+    ]
 
 
-def prediction_columns(branches=BRANCH_CONFIGS):
+def prediction_columns(branches):
     cols = []
     for branch in branches:
         for seed in branch["seeds"]:
@@ -323,7 +327,9 @@ def load_all_pt_files(dataset_dir):
             except Exception as exc:
                 print(f"Skip unreadable {fpath}: {exc}")
                 continue
-            gid = getattr(data, "group_id", 0) if hasattr(data, "group_id") else 0
+            if not hasattr(data, "group_id"):
+                raise ValueError(f"Missing required group_id in {fpath}")
+            gid = getattr(data, "group_id")
             sample_id = fpath.stem
             samples.append({
                 "key": f"{system_id}/{sample_id}",
@@ -556,9 +562,9 @@ def train_final_and_predict(branch, train_pool_samples, test_samples, device, ou
     return meta, preds
 
 
-def load_branch_samples():
+def load_branch_samples(branches):
     loaded = {}
-    for branch in BRANCH_CONFIGS:
+    for branch in branches:
         dataset = Path(branch["dataset"])
         if not dataset.exists():
             raise FileNotFoundError(f"Missing dataset for {branch['label']}: {dataset}")
@@ -567,32 +573,3 @@ def load_branch_samples():
             raise RuntimeError(f"No samples loaded for {branch['label']} from {dataset}")
         loaded[branch["key"]] = samples
     return loaded
-
-
-def write_prediction_table(path, rows, pred_cols):
-    path = Path(path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with open(path, "w", newline="") as f:
-        fieldnames = [
-            "key", "system_id", "sample_id", "y_true",
-            *pred_cols,
-            "ensemble_mean", "ensemble_variance", "abs_error_ensemble",
-            "uq_winsor", "uq_calibrated",
-        ]
-        writer = csv.DictWriter(f, fieldnames=fieldnames)
-        writer.writeheader()
-        for row in rows:
-            writer.writerow(row)
-
-
-def read_prediction_table(path):
-    with open(path, newline="") as f:
-        return list(csv.DictReader(f))
-
-
-def rows_to_arrays(rows, pred_cols):
-    y = np.array([float(r["y_true"]) for r in rows], dtype=np.float64)
-    preds = np.array([[float(r[c]) for c in pred_cols] for r in rows], dtype=np.float64)
-    uq = np.array([float(r["uq_calibrated"]) for r in rows], dtype=np.float64)
-    raw_var = np.array([float(r["ensemble_variance"]) for r in rows], dtype=np.float64)
-    return y, preds, raw_var, uq

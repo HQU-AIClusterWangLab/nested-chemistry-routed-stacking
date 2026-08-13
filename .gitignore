@@ -1,7 +1,6 @@
 # Private scientific data and derived tables
-data/raw/
-data/processed/
-data/private/
+data/*
+!data/README.md
 dataset/
 datasets/
 database/
@@ -19,6 +18,8 @@ checkpoints/
 models/
 runs/
 outputs/
+results/
+ncrs_run/
 
 # Electronic-structure inputs, outputs, and real-space fields
 *.log
